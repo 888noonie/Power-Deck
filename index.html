@@ -1,19 +1,709 @@
 <!DOCTYPE html>
-<!-- Full fixed Power Deck app. The previous version failed because the astrology library is CommonJS and could not be imported as ESM in the browser. This version uses dynamic import from esm.sh and attaches the button properly. Open on phone, pick a date of birth, press DEAL. -->
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>POWER DECK - Fixed</title>
-<style>body{font-family:system-ui;background:#0a0a0a;color:#f0e6d2;padding:2rem;text-align:center} h1{color:#d4af37} .btn{background:#d4af37;color:#000;padding:1rem 2rem;border:none;border-radius:10px;font-weight:700;font-size:1.1rem;margin-top:1rem} .status{margin:1rem;min-height:2rem}</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <title>POWER DECK • Your Personal Trump Card Astrology</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --gold: #d4af37;
+      --gold-light: #f5e6b3;
+      --gold-dim: #8b6914;
+      --dark: #0a0a0a;
+      --card: #141414;
+      --text: #f0e6d2;
+      --green: #2ecc71;
+      --red: #e74c3c;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: radial-gradient(ellipse at top, #1a1208 0%, #0a0a0a 60%);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.55;
+      overscroll-behavior: none;
+    }
+    .container { max-width: 720px; margin: 0 auto; padding: 1.25rem 1rem 4rem; }
+    header { text-align: center; margin-bottom: 1.75rem; padding-bottom: 1.25rem; border-bottom: 1px solid rgba(212,175,55,0.35); }
+    h1 {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: clamp(2.4rem, 8vw, 3.6rem);
+      font-weight: 900;
+      color: var(--gold);
+      letter-spacing: 0.5px;
+      text-shadow: 0 0 40px rgba(212,175,55,0.25);
+      line-height: 1.1;
+    }
+    .subtitle { font-size: 1.05rem; color: var(--gold-light); margin-top: 0.4rem; font-weight: 500; }
+    .tagline { font-size: 0.9rem; opacity: 0.72; margin-top: 0.7rem; max-width: 480px; margin-left: auto; margin-right: auto; }
+    .form-card {
+      background: var(--card);
+      border: 1px solid #2a2a2a;
+      border-radius: 18px;
+      padding: 1.4rem;
+      margin-bottom: 1.75rem;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+    }
+    label {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--gold);
+      margin: 1rem 0 0.35rem;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+    }
+    label:first-child { margin-top: 0; }
+    input, select {
+      width: 100%;
+      padding: 0.8rem 0.95rem;
+      background: #0c0c0c;
+      border: 1px solid #3a3a3a;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 1.02rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--gold);
+      box-shadow: 0 0 0 3px rgba(212,175,55,0.15);
+    }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    .note { font-size: 0.78rem; opacity: 0.65; margin-top: 0.3rem; }
+    .btn {
+      width: 100%;
+      background: linear-gradient(135deg, #e0b93a 0%, #a67c00 100%);
+      color: #0a0a0a;
+      border: none;
+      padding: 1.05rem 1.5rem;
+      font-size: 1.12rem;
+      font-weight: 800;
+      border-radius: 12px;
+      cursor: pointer;
+      margin-top: 1.4rem;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      box-shadow: 0 6px 24px rgba(212,175,55,0.35);
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+    .status { text-align: center; margin: 1rem 0 0; font-weight: 500; min-height: 1.4rem; font-size: 0.95rem; }
+    .status.error { color: #ff6b6b; }
+    .status.ok { color: #7dcea0; }
+    .loading {
+      display: inline-block; width: 16px; height: 16px;
+      border: 2px solid var(--gold); border-top-color: transparent;
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+      vertical-align: middle; margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Results */
+    #results { display: none; animation: fadeUp 0.45s ease; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+    .section-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.55rem;
+      color: var(--gold);
+      text-align: center;
+      margin: 2rem 0 1rem;
+      letter-spacing: 0.3px;
+    }
+    .raw-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.35rem;
+      background: #111;
+      padding: 1rem 1.1rem;
+      border-radius: 14px;
+      border: 1px solid #2a2a2a;
+      font-size: 0.9rem;
+    }
+    @media (min-width: 520px) { .raw-grid { grid-template-columns: 1fr 1fr; } }
+    .raw-item {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: 0.4rem 0; border-bottom: 1px solid #1f1f1f;
+    }
+    .raw-item:last-child { border-bottom: none; }
+    .raw-item span:first-child { color: var(--gold-light); font-weight: 500; }
+    .raw-item .rx { color: #ff8a80; font-size: 0.8em; margin-left: 4px; }
+
+    .deck { display: flex; flex-direction: column; gap: 1rem; margin-top: 0.5rem; }
+    .power-card {
+      background: linear-gradient(160deg, #1c1c1c 0%, #121212 100%);
+      border: 1px solid #333;
+      border-radius: 16px;
+      padding: 1.25rem 1.3rem;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+    .power-card::before {
+      content: '';
+      position: absolute; left: 0; top: 0; bottom: 0; width: 5px;
+    }
+    .power-card.strength::before { background: var(--green); }
+    .power-card.trap::before { background: var(--red); }
+    .power-card.destiny::before { background: var(--gold); }
+    .power-card.destiny { background: linear-gradient(160deg, #1f1a0c 0%, #14100a 100%); border-color: rgba(212,175,55,0.35); }
+    .card-type {
+      font-size: 0.68rem; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 1.1px; margin-bottom: 0.35rem;
+    }
+    .strength .card-type { color: var(--green); }
+    .trap .card-type { color: var(--red); }
+    .destiny .card-type { color: var(--gold); }
+    .card-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.28rem; font-weight: 700;
+      color: var(--gold-light); margin-bottom: 0.65rem; line-height: 1.25;
+    }
+    .card-body { font-size: 0.95rem; opacity: 0.93; }
+    .card-body strong { color: var(--gold); }
+
+    .actions { display: flex; gap: 0.6rem; margin-top: 1.5rem; }
+    .btn-secondary {
+      flex: 1; background: transparent; border: 1px solid var(--gold);
+      color: var(--gold); padding: 0.85rem; border-radius: 10px;
+      font-weight: 700; font-size: 0.95rem; cursor: pointer;
+    }
+    .how-to {
+      background: #111; border: 1px solid rgba(212,175,55,0.4);
+      border-radius: 16px; padding: 1.3rem; margin-top: 1.75rem;
+    }
+    .how-to h3 { color: var(--gold); font-family: 'Playfair Display', serif; margin-bottom: 0.7rem; font-size: 1.25rem; }
+    footer {
+      text-align: center; margin-top: 3rem; padding-top: 1.25rem;
+      border-top: 1px solid #222; font-size: 0.8rem; opacity: 0.55;
+    }
+    .city-select { margin-bottom: 0.5rem; }
+  </style>
 </head>
 <body>
-<h1>POWER DECK</h1>
-<p>Fixed version loading...</p>
-<p>Full app is being prepared. The button issue was the library module format.</p>
-<p>Go to the Vercel project or wait for full redeploy. Or clone this repo and open index.html after the full content is pushed.</p>
-<button class="btn" onclick="alert('Full calculation engine will be restored shortly. The root cause was fixed in the code.')">TEST</button>
-<div class="status" id="status">Ready for full update</div>
-<script>console.log('Placeholder fixed notice');</script>
+  <div class="container">
+    <header>
+      <h1>POWER DECK</h1>
+      <div class="subtitle">Your Personal Trump Card Astrology System</div>
+      <p class="tagline">Enter the real data. We calculate the real sky. Then we deal the exact strength cards and pressure cards the universe handed you — in pure power language.</p>
+    </header>
+
+    <div class="form-card">
+      <label>Your Name</label>
+      <input type="text" id="name" value="Random Rich" placeholder="Your name" autocomplete="name" />
+
+      <label>Date of Birth</label>
+      <input type="date" id="dob" required />
+      <div class="note">Required for accurate positions</div>
+
+      <div class="row">
+        <div>
+          <label>Time of Birth</label>
+          <input type="time" id="tob" value="12:00" />
+          <div class="note">Local time</div>
+        </div>
+        <div>
+          <label>Quick City</label>
+          <select id="citySelect" class="city-select">
+            <option value="">— or type place below —</option>
+            <option value="40.7128,-74.0060">New York, USA</option>
+            <option value="51.5074,-0.1278">London, UK</option>
+            <option value="34.0522,-118.2437">Los Angeles, USA</option>
+            <option value="41.8781,-87.6298">Chicago, USA</option>
+            <option value="25.7617,-80.1918">Miami, USA</option>
+            <option value="48.8566,2.3522">Paris, France</option>
+            <option value="52.5200,13.4050">Berlin, Germany</option>
+            <option value="35.6762,139.6503">Tokyo, Japan</option>
+            <option value="22.3193,114.1694">Hong Kong</option>
+            <option value="1.3521,103.8198">Singapore</option>
+            <option value="55.7558,37.6173">Moscow, Russia</option>
+            <option value="19.4326,-99.1332">Mexico City</option>
+            <option value="33.8688,151.2093">Sydney, Australia</option>
+            <option value="28.6139,77.2090">New Delhi, India</option>
+            <option value="39.9042,116.4074">Beijing, China</option>
+            <option value="52.9548,-1.1581">Nottingham, UK</option>
+          </select>
+        </div>
+      </div>
+
+      <label>Birth City or Place</label>
+      <input type="text" id="place" placeholder="e.g. Nottingham, UK" />
+      <div class="note">Used for Ascendant & houses (or pick a city above)</div>
+
+      <div class="row">
+        <div>
+          <label>Latitude (optional)</label>
+          <input type="number" id="lat" step="any" placeholder="40.7128" />
+        </div>
+        <div>
+          <label>Longitude (optional)</label>
+          <input type="number" id="lng" step="any" placeholder="-74.0060" />
+        </div>
+      </div>
+
+      <button class="btn" id="dealBtn">DEAL MY POWER DECK</button>
+      <div class="status" id="status"></div>
+    </div>
+
+    <div id="results">
+      <h2 class="section-title" id="welcomeTitle"></h2>
+
+      <h3 class="section-title" style="font-size:1.25rem;margin-top:1.5rem;">Calculated Positions</h3>
+      <div class="raw-grid" id="rawPositions"></div>
+
+      <h3 class="section-title">YOUR POWER DECK</h3>
+      <div class="deck" id="deck"></div>
+
+      <div class="actions">
+        <button class="btn-secondary" id="copyBtn">Copy Deck Text</button>
+        <button class="btn-secondary" id="againBtn">Deal Again</button>
+      </div>
+
+      <div class="how-to" id="howToPlay"></div>
+    </div>
+
+    <footer>
+      Tropical zodiac • Whole Sign houses • Live planetary engine<br>
+      Built for the game of life. Play the hand you were actually dealt.
+    </footer>
+  </div>
+
+  <script type="module">
+    // ========== ROBUST LIBRARY LOADER ==========
+    let Origin, Horoscope;
+    let libReady = false;
+
+    async function loadAstrologyLib() {
+      if (libReady) return true;
+      try {
+        const mod = await import('https://esm.sh/circular-natal-horoscope-js@1.1.0');
+        Origin = mod.Origin || mod.default?.Origin;
+        Horoscope = mod.Horoscope || mod.default?.Horoscope;
+        if (!Origin || !Horoscope) throw new Error('Library exports missing');
+        libReady = true;
+        return true;
+      } catch (e) {
+        console.error('Primary lib failed', e);
+        // Fallback attempt with different CDN
+        try {
+          const mod2 = await import('https://cdn.jsdelivr.net/npm/circular-natal-horoscope-js@1.1.0/+esm');
+          Origin = mod2.Origin;
+          Horoscope = mod2.Horoscope;
+          libReady = true;
+          return true;
+        } catch (e2) {
+          console.error('Fallback also failed', e2);
+          return false;
+        }
+      }
+    }
+
+    // ========== INTERPRETATION DATA ==========
+    const SIGN_POWER = {
+      aries: { title: "The Warrior Spark", text: "Pure initiative. You start fires and charge first. Tremendous drive, zero patience for waiting around." },
+      taurus: { title: "The Unshakeable Builder", text: "You turn ideas into real, lasting value. Slow, steady, and impossible to move once committed. Money and pleasure are your native language." },
+      gemini: { title: "The Lightning Mind", text: "Information is your superpower. You connect dots faster than most people can speak. Curiosity is rocket fuel." },
+      cancer: { title: "The Emotional Fortress", text: "You feel the room before anyone speaks. Loyalty runs deep. When you protect something, it stays protected." },
+      leo: { title: "The Golden Spotlight", text: "You were born to be seen. Creative fire, natural leadership, and a presence that fills any room. The world notices when you walk in." },
+      virgo: { title: "The Precision Engine", text: "You see the flaw before it becomes a problem. Service, mastery, and relentless improvement are how you win." },
+      libra: { title: "The Master Negotiator", text: "Balance, beauty, and strategic partnerships. You make deals look elegant while still getting exactly what you want." },
+      scorpio: { title: "The Depth Charge", text: "Intensity is your native frequency. You transform whatever you touch. Secrets, power, and regeneration are your domain." },
+      sagittarius: { title: "The Horizon Chaser", text: "Big vision, bigger truth-seeking. You expand everything you join. Freedom and meaning are non-negotiable." },
+      capricorn: { title: "The Mountain King", text: "Long-game mastery. Status, structure, and real achievement. You age into power while others peak early." },
+      aquarius: { title: "The Future Shock", text: "You think in systems and revolutions. Detached brilliance. The crowd eventually catches up to where you already are." },
+      pisces: { title: "The Dream Architect", text: "Imagination without limits. You absorb the invisible currents. Compassion and creativity flow from the same deep well." }
+    };
+
+    const HOUSE_MEANING = {
+      1: "identity & the mask you show the world",
+      2: "money, values, and what you own",
+      3: "mind, communication, and immediate environment",
+      4: "home, roots, and private foundation",
+      5: "creativity, romance, children, and pure joy",
+      6: "daily work, health, and systems of service",
+      7: "one-on-one partnerships and open contracts",
+      8: "shared resources, intimacy, transformation, and the occult",
+      9: "beliefs, higher learning, long journeys, and philosophy",
+      10: "career, public reputation, and the mountain of status",
+      11: "friends, networks, groups, and future vision",
+      12: "the hidden, spirituality, solitude, and self-undoing"
+    };
+
+    function getSign(deg) {
+      const signs = ['aries','taurus','gemini','cancer','leo','virgo','libra','scorpio','sagittarius','capricorn','aquarius','pisces'];
+      return signs[Math.floor(((deg % 360) + 360) % 360 / 30) % 12];
+    }
+    function formatDeg(deg) {
+      const d = Math.floor(((deg % 360) + 360) % 360 % 30);
+      const m = Math.floor((((deg % 360) + 360) % 360 % 1) * 60);
+      return `${d}°${String(m).padStart(2,'0')}’`;
+    }
+    function signName(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : '?'; }
+    function ordinal(n) {
+      const s = ['th','st','nd','rd'];
+      const v = n % 100;
+      return (s[(v-20)%10] || s[v] || s[0]);
+    }
+
+    // ========== GEOCODE ==========
+    async function geocode(place) {
+      if (!place || place.trim().length < 2) return null;
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(place)}&limit=1`;
+        const res = await fetch(url, { headers: { 'User-Agent': 'PowerDeckAstrology/2.0' }, signal: AbortSignal.timeout(6000) });
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (data?.[0]) return { lat: +data[0].lat, lng: +data[0].lon, display: data[0].display_name };
+      } catch (_) {}
+      return null;
+    }
+
+    // ========== CHART EXTRACTION ==========
+    function extractChart(horoscope) {
+      const bodies = {};
+      ['sun','moon','mercury','venus','mars','jupiter','saturn','uranus','neptune','pluto'].forEach(key => {
+        const b = horoscope.CelestialBodies?.[key];
+        if (b) {
+          const deg = b.ChartPosition?.Ecliptic?.DecimalDegrees ?? b.ChartPosition?.Ecliptic?.DecimalDegrees;
+          bodies[key] = {
+            sign: getSign(deg),
+            deg,
+            house: b.House ? parseInt(b.House, 10) : null,
+            retrograde: !!b.isRetrograde,
+            label: (b.Label || key).replace(/^\w/, c => c.toUpperCase())
+          };
+        }
+      });
+
+      const points = {};
+      ['northnode','southnode','lilith'].forEach(key => {
+        const p = horoscope.CelestialPoints?.[key];
+        if (p) {
+          const deg = p.ChartPosition?.Ecliptic?.DecimalDegrees;
+          points[key] = { sign: getSign(deg), deg, house: p.House ? parseInt(p.House, 10) : null };
+        }
+      });
+
+      const angles = {};
+      ['ascendant','midheaven'].forEach(key => {
+        const a = horoscope.Angles?.[key];
+        if (a) {
+          const deg = a.ChartPosition?.Ecliptic?.DecimalDegrees;
+          angles[key] = { sign: getSign(deg), deg };
+        }
+      });
+
+      const aspects = [];
+      if (horoscope.Aspects?.all) {
+        horoscope.Aspects.all.forEach(asp => {
+          if (asp.orb <= 7) {
+            aspects.push({
+              p1: (asp.point1Key || asp.point1 || '').toLowerCase(),
+              p2: (asp.point2Key || asp.point2 || '').toLowerCase(),
+              type: (asp.aspectKey || asp.type || '').toLowerCase(),
+              orb: +asp.orb.toFixed(2)
+            });
+          }
+        });
+      }
+
+      return { bodies, points, angles, aspects };
+    }
+
+    // ========== POWER DECK GENERATOR (top-tier logic) ==========
+    function generatePowerDeck(name, chart) {
+      const cards = [];
+      const { bodies, points, angles, aspects } = chart;
+      const used = new Set();
+
+      // Helper
+      const hasAspect = (a, b, types = ['conjunction','opposition','square','trine','sextile']) =>
+        aspects.some(x => ((x.p1 === a && x.p2 === b) || (x.p1 === b && x.p2 === a)) && types.includes(x.type));
+
+      // 1. ASC
+      if (angles.ascendant) {
+        const s = angles.ascendant.sign;
+        cards.push({
+          type: 'strength',
+          title: `The ${SIGN_POWER[s].title} Rising`,
+          body: `Ascendant in <strong>${signName(s)}</strong>. The world meets the ${SIGN_POWER[s].title.toLowerCase()} version of you first. ${SIGN_POWER[s].text} This is your automatic vehicle and first impression. Master it and every room opens differently.`
+        });
+        used.add('asc');
+      }
+
+      // 2. Sun
+      if (bodies.sun) {
+        const s = bodies.sun.sign;
+        const h = bodies.sun.house || '?';
+        cards.push({
+          type: 'strength',
+          title: `The ${SIGN_POWER[s].title} Core`,
+          body: `Sun in <strong>${signName(s)}</strong> in the <strong>${h}${ordinal(h)} House</strong> (${HOUSE_MEANING[h] || 'core purpose'}). ${SIGN_POWER[s].text} This is the engine of your will. Own it loudly and the rest of the chart starts working for you.`
+        });
+      }
+
+      // 3. Moon
+      if (bodies.moon) {
+        const s = bodies.moon.sign;
+        const h = bodies.moon.house || '?';
+        cards.push({
+          type: 'strength',
+          title: `Emotional OS — ${signName(s)}`,
+          body: `Moon in <strong>${signName(s)}</strong> (${h}${ordinal(h)} House). ${SIGN_POWER[s].text} Your instinctive needs and security system revolve around ${HOUSE_MEANING[h] || 'the inner world'}. When this is healthy, people feel safe with you. When ignored, mood becomes the weather.`
+        });
+      }
+
+      // 4. Career / 10th power
+      const tenth = Object.entries(bodies).filter(([,v]) => v.house === 10).map(([k]) => k);
+      if (tenth.length || (angles.midheaven && ['scorpio','capricorn','leo','aries','aquarius'].includes(angles.midheaven.sign))) {
+        let body = `Your 10th house and Midheaven carry serious voltage. `;
+        if (bodies.mars?.house === 10) body += `Mars here gives competitive drive and visible action. `;
+        if (bodies.pluto?.house === 10) body += `Pluto in the 10th is nuclear — you transform roles and reputations. `;
+        if (bodies.saturn?.house === 10) body += `Saturn builds lasting authority the hard way. `;
+        if (bodies.sun?.house === 10) body += `Sun on the career axis puts your core identity on the public stage. `;
+        body += `Play this card in every professional arena. The mountain is yours.`;
+        cards.push({ type: 'strength', title: 'Public Power & Status', body });
+      }
+
+      // 5. Mars-Pluto special
+      if (bodies.mars && bodies.pluto && Math.abs(bodies.mars.deg - bodies.pluto.deg) < 9) {
+        cards.push({
+          type: 'strength',
+          title: 'Nuclear Force Conjunction',
+          body: `Mars and Pluto are working as a team (within ${Math.abs(bodies.mars.deg - bodies.pluto.deg).toFixed(1)}°). One of the strongest power combinations possible. You don’t just compete — you reshape the board. Use it for transformation, not destruction, and people start following.`
+        });
+      }
+
+      // 6. North Node destiny
+      if (points.northnode) {
+        const s = points.northnode.sign;
+        const h = points.northnode.house || '?';
+        cards.push({
+          type: 'destiny',
+          title: `Destiny — North Node in ${signName(s)}`,
+          body: `Your growth edge lives in <strong>${signName(s)}</strong> energy and the ${h}${ordinal(h)} House (${HOUSE_MEANING[h] || 'evolution'}). Lean into this even when it feels uncomfortable. The more you do, the more the rest of the chart starts singing. This is the direction that makes the whole hand work.`
+        });
+      }
+
+      // TRAP CARDS
+      if (hasAspect('sun', 'uranus', ['square','opposition'])) {
+        cards.push({
+          type: 'trap',
+          title: 'The Sudden Earthquake',
+          body: `Sun under hard aspect to Uranus. Your identity and path love to collide with sudden change. Expect abrupt shifts in direction, reputation, or self-image. The same voltage that makes you exciting also refuses to let life stay stable. Master the surprise or the table keeps flipping.`
+        });
+      }
+
+      if (hasAspect('moon', 'mars', ['square','opposition','conjunction']) || hasAspect('moon', 'pluto', ['square','opposition','conjunction'])) {
+        cards.push({
+          type: 'trap',
+          title: 'Emotional Power Struggle',
+          body: `Moon under pressure from Mars or Pluto. Feelings and force field are constantly negotiating. Close relationships can turn into quiet wars for control. Own your intensity without weaponizing it — or people start keeping score.`
+        });
+      }
+
+      if (hasAspect('venus', 'saturn', ['square','opposition','conjunction'])) {
+        cards.push({
+          type: 'trap',
+          title: 'The Delayed Heart',
+          body: `Venus under Saturn pressure. Love, ease, and sometimes money through partnerships do not arrive on the first try. Affection can feel restricted or postponed. This card rewards maturity and long loyalty. It punishes impatience and emotional shortcuts.`
+        });
+      }
+
+      if (hasAspect('sun', 'saturn', ['square','opposition','conjunction'])) {
+        cards.push({
+          type: 'trap',
+          title: 'The Heavy Crown',
+          body: `Sun under Saturn. Authority, recognition, and self-confidence are earned the hard way. Early pressure often forges later mastery. Respect comes, but it comes after the tests.`
+        });
+      }
+
+      // Extra strength if Mercury or Venus strong
+      if (cards.length < 7 && bodies.mercury) {
+        cards.push({
+          type: 'strength',
+          title: `Mind Card — Mercury in ${signName(bodies.mercury.sign)}`,
+          body: `Thinking and communication style is pure ${signName(bodies.mercury.sign)}. ${SIGN_POWER[bodies.mercury.sign].text} In the ${bodies.mercury.house}${ordinal(bodies.mercury.house)} house this becomes how you process and share power in that life area.`
+        });
+      }
+
+      // Prioritize
+      const strengths = cards.filter(c => c.type === 'strength').slice(0, 5);
+      const traps = cards.filter(c => c.type === 'trap').slice(0, 3);
+      const destiny = cards.filter(c => c.type === 'destiny').slice(0, 1);
+      return [...strengths, ...traps, ...destiny];
+    }
+
+    // ========== RENDER ==========
+    function renderRaw(chart) {
+      const el = document.getElementById('rawPositions');
+      let html = '';
+      const order = ['sun','moon','mercury','venus','mars','jupiter','saturn','uranus','neptune','pluto'];
+      order.forEach(k => {
+        const b = chart.bodies[k];
+        if (b) {
+          html += `<div class="raw-item"><span>${b.label}</span><span>${signName(b.sign)} ${formatDeg(b.deg)} • H${b.house || '?'}${b.retrograde ? '<span class="rx"> Rx</span>' : ''}</span></div>`;
+        }
+      });
+      if (chart.angles.ascendant) {
+        html += `<div class="raw-item"><span>Ascendant</span><span>${signName(chart.angles.ascendant.sign)} ${formatDeg(chart.angles.ascendant.deg)}</span></div>`;
+      }
+      if (chart.angles.midheaven) {
+        html += `<div class="raw-item"><span>Midheaven</span><span>${signName(chart.angles.midheaven.sign)} ${formatDeg(chart.angles.midheaven.deg)}</span></div>`;
+      }
+      if (chart.points.northnode) {
+        html += `<div class="raw-item"><span>North Node</span><span>${signName(chart.points.northnode.sign)} ${formatDeg(chart.points.northnode.deg)} • H${chart.points.northnode.house || '?'}</span></div>`;
+      }
+      el.innerHTML = html || '<div class="raw-item"><span>Positions calculated</span><span>✓</span></div>';
+    }
+
+    function renderDeck(cards) {
+      document.getElementById('deck').innerHTML = cards.map(c => `
+        <div class="power-card ${c.type}">
+          <div class="card-type">${c.type === 'strength' ? 'STRENGTH CARD' : c.type === 'trap' ? 'TRAP / PRESSURE CARD' : 'DESTINY CARD'}</div>
+          <div class="card-title">${c.title}</div>
+          <div class="card-body">${c.body}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderHowTo(name) {
+      document.getElementById('howToPlay').innerHTML = `
+        <h3>How to Play This Deck Like a Winner, ${name}</h3>
+        <p>Lead with your strongest Strength cards in every high-stakes situation. Protect and feed the Sun + Ascendant energy daily — that is your core voltage.</p>
+        <p>Treat every Trap card as a weather report, not a personal failure. When those aspects activate, change the channel instead of doubling down on control or drama.</p>
+        <p>Your Destiny card is the long game. The more you deliberately practice that sign and house, the more the rest of the chart starts working <em>for</em> you.</p>
+        <p style="margin-top:0.9rem;font-weight:700;color:var(--gold);">This is a high-voltage hand. You were not designed for average. Shuffle up and play the cards you were actually dealt.</p>
+      `;
+    }
+
+    // ========== MAIN DEAL FUNCTION ==========
+    async function dealTheCards() {
+      const btn = document.getElementById('dealBtn');
+      const status = document.getElementById('status');
+      const name = (document.getElementById('name').value || 'Player').trim();
+      const dob = document.getElementById('dob').value;
+      const tob = document.getElementById('tob').value || '12:00';
+      let lat = parseFloat(document.getElementById('lat').value);
+      let lng = parseFloat(document.getElementById('lng').value);
+      const place = document.getElementById('place').value.trim();
+      const cityVal = document.getElementById('citySelect').value;
+
+      if (!dob) {
+        status.className = 'status error';
+        status.textContent = 'Date of birth is required. Tap the date field.';
+        return;
+      }
+
+      btn.disabled = true;
+      status.className = 'status';
+      status.innerHTML = '<span class="loading"></span> Loading engine & calculating the real sky…';
+
+      try {
+        const ok = await loadAstrologyLib();
+        if (!ok) throw new Error('Astrology engine could not load. Check connection and try again.');
+
+        // Coordinates priority: manual lat/lng > city select > geocode place > default
+        if (!isNaN(lat) && !isNaN(lng)) {
+          // use provided
+        } else if (cityVal) {
+          const [la, lo] = cityVal.split(',').map(Number);
+          lat = la; lng = lo;
+        } else if (place) {
+          status.innerHTML = '<span class="loading"></span> Locating birth place…';
+          const geo = await geocode(place);
+          if (geo) {
+            lat = geo.lat; lng = geo.lng;
+            status.innerHTML = `<span class="ok">Located: ${geo.display.split(',').slice(0,2).join(',')}</span>`;
+          } else {
+            lat = 51.5074; lng = -0.1278; // London fallback
+            status.innerHTML = 'Place not found — using default (less accurate houses)';
+          }
+        } else {
+          lat = 51.5074; lng = -0.1278;
+        }
+
+        const [year, month, day] = dob.split('-').map(Number);
+        const [hour, minute] = tob.split(':').map(Number);
+
+        const origin = new Origin({
+          year, month: month - 1, date: day,
+          hour, minute,
+          latitude: lat, longitude: lng
+        });
+
+        const horoscope = new Horoscope({
+          origin,
+          houseSystem: 'whole-sign',
+          zodiac: 'tropical',
+          aspectPoints: ['bodies', 'points', 'angles'],
+          aspectWithPoints: ['bodies', 'points', 'angles'],
+          aspectTypes: ['major'],
+          language: 'en'
+        });
+
+        const chart = extractChart(horoscope);
+        const cards = generatePowerDeck(name, chart);
+
+        document.getElementById('welcomeTitle').textContent = `THE OFFICIAL POWER DECK OF ${name.toUpperCase()}`;
+        renderRaw(chart);
+        renderDeck(cards);
+        renderHowTo(name);
+
+        // Store for copy
+        window.__lastDeck = { name, cards, chart };
+
+        document.getElementById('results').style.display = 'block';
+        status.className = 'status ok';
+        status.textContent = 'Deck dealt. These are your real cards.';
+        document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      } catch (err) {
+        console.error(err);
+        status.className = 'status error';
+        status.textContent = 'Error: ' + (err.message || 'Something went wrong. Try again or different inputs.');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // ========== INIT ==========
+    document.getElementById('dob').value = '1985-08-08';
+    document.getElementById('dealBtn').addEventListener('click', dealTheCards);
+    document.getElementById('againBtn')?.addEventListener('click', () => {
+      document.getElementById('results').style.display = 'none';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    document.getElementById('copyBtn')?.addEventListener('click', () => {
+      if (!window.__lastDeck) return;
+      const { name, cards } = window.__lastDeck;
+      let text = `THE OFFICIAL POWER DECK OF ${name.toUpperCase()}\n\n`;
+      cards.forEach(c => {
+        text += `${c.type.toUpperCase()}: ${c.title}\n${c.body.replace(/<[^>]+>/g, '')}\n\n`;
+      });
+      text += '— Generated by Power Deck';
+      navigator.clipboard.writeText(text).then(() => {
+        document.getElementById('status').textContent = 'Deck copied to clipboard!';
+        document.getElementById('status').className = 'status ok';
+      });
+    });
+
+    // City select helper
+    document.getElementById('citySelect').addEventListener('change', (e) => {
+      if (e.target.value) {
+        const [la, lo] = e.target.value.split(',');
+        document.getElementById('lat').value = la;
+        document.getElementById('lng').value = lo;
+      }
+    });
+
+    // Preload
+    loadAstrologyLib().then(ok => console.log(ok ? 'Power Deck engine ready' : 'Engine preload failed — will retry on click'));
+  </script>
 </body>
 </html>
